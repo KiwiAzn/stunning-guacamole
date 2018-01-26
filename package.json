@@ -1,7 +1,7 @@
 {
-  "name": "hft-simple-no-electron",
-  "productName": "happyfuntimes simple example",
-  "description": "A simple example without electron",
+  "name": "stunning-guacamole",
+  "productName": "stunning-guacamole",
+  "description": "A game made using happyfuntimes and phaser",
   "private": false,
   "version": "0.0.7",
   "main": "main.js",
@@ -10,23 +10,24 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/greggman/hft-simple-no-electron.git"
+    "url": "git+https://github.com/cjsgoodwin/stunning-guacamole"
   },
   "keywords": [
     "local",
     "multiplayer",
     "game"
   ],
-  "author": "Gregg Tavares",
+  "author": "Chris Goodwin",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/greggman/hft-simple-no-electron/issues"
+    "url": "https://github.com/cjsgoodwin/stunning-guacamole/issues"
   },
-  "homepage": "https://github.com/greggman/hft-simple-no-electron#readme",
+  "homepage": "https://github.com/cjsgoodwin/stunning-guacamole#readme",
   "dependencies": {
     "happyfuntimes": "^0.2.1",
     "hft-game-utils": "^1.0.0",
     "hft-sample-ui": "^1.0.0",
+    "phaser": "^2.6.2",
     "requirejs": "^2.3.2"
   }
 }
