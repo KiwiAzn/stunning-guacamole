@@ -1,9 +1,16 @@
 {
-  "name": "stunning-guacamole",
-  "productName": "stunning-guacamole",
-  "description": "A game made using happyfuntimes and phaser",
+  "name": "hft-simple",
+  "productName": "happyfuntimes simple example",
+  "description": "A simple example",
   "private": false,
   "version": "0.0.7",
+  "build": {
+    "appId": "com.greggman.hftSimple",
+    "asar": false,
+    "mac": {
+      "category": "public.app-category.games"
+    }
+  },
   "main": "main.js",
   "scripts": {
     "start": "cross-env NODE_ENV=development electron main.js",
@@ -13,26 +20,28 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cjsgoodwin/stunning-guacamole"
+    "url": "git+https://github.com/greggman/hft-simple.git"
   },
   "keywords": [
     "local",
     "multiplayer",
     "game"
   ],
-  "author": "Chris Goodwin",
+  "author": "Gregg Tavares",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/cjsgoodwin/stunning-guacamole/issues"
+    "url": "https://github.com/greggman/hft-simple/issues"
   },
-  "homepage": "https://github.com/cjsgoodwin/stunning-guacamole#readme",
+  "homepage": "https://github.com/greggman/hft-simple#readme",
   "dependencies": {
     "happyfuntimes": "^0.2.1",
     "hft-game-utils": "^1.0.0",
     "hft-sample-ui": "^1.0.0",
-    "phaser": "^2.6.2",
+    "lodash": "^4.17.4",
     "optionator": "^0.8.2",
-    "requirejs": "^2.3.2"
+    "phaser": "^2.6.2",
+    "requirejs": "^2.3.2",
+    "roguelike": "^0.5.0"
   },
   "devDependencies": {
     "cross-env": "^3.1.3",
