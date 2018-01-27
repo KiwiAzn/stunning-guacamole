@@ -81,6 +81,10 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   let genericUndeadGroup = null;
   let uiGroup = null;
 
+  let decorGroup = null;
+  let goreEmitter = null;
+  let bloodEmitter = null;
+
   let entrance = null;
   let exit = null;
 
@@ -144,6 +148,15 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     );
 
     game.load.spritesheet("ammo", "./assets/DawnLike/Items/Ammo.png", 16, 16);
+
+    game.load.spritesheet("gore", "./assets/DawnLike/Items/Flesh.png", 16, 16);
+
+    game.load.spritesheet(
+      "blood",
+      "./assets/DawnLike/Objects/Ground0.png",
+      16,
+      16
+    );
   }
 
   function create() {
@@ -170,8 +183,44 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     floorGroup = game.add.group();
     doorGroup = game.add.group();
     genericUndeadGroup = game.add.group();
+    decorGroup = game.add.group();
+
+    // Create gore emitter
+    goreEmitter = game.add.emitter(0, 0, 500);
+
+    goreEmitter.makeParticles(
+      "gore",
+      _.concat(_.range(0, 20), _.range(23, 26)),
+      50,
+      true
+    );
+
+    goreEmitter.gravity = 0;
+    goreEmitter.minParticleSpeed.setTo(-100, -100);
+    goreEmitter.maxParticleSpeed.setTo(100, 100);
+    goreEmitter.minParticleScale = 1;
+    goreEmitter.maxParticleScale = 1.5;
+    goreEmitter.bounce.setTo(0.1, 0.1);
+    goreEmitter.angularDrag = 250;
+    goreEmitter.particleDrag.setTo(100, 100);
+
+    bloodEmitter = game.add.emitter(0, 0, 1000);
+
+    bloodEmitter.makeParticles("blood", [40, 41, 48, 49], 50, true);
+
+    bloodEmitter.gravity = 0;
+    bloodEmitter.minParticleSpeed.setTo(-100, -100);
+    bloodEmitter.maxParticleSpeed.setTo(100, 100);
+    bloodEmitter.minParticleScale = 1;
+    bloodEmitter.maxParticleScale = 1.5;
+    bloodEmitter.bounce.setTo(0.1, 0.1);
+    bloodEmitter.angularDrag = 250;
+    bloodEmitter.particleDrag.setTo(100, 100);
+    bloodEmitter.setAlpha(0.3, 0.8);
 
     game.world.sendToBack(floorGroup);
+    game.world.bringToTop(bloodEmitter);
+    game.world.bringToTop(goreEmitter);
     game.world.bringToTop(genericUndeadGroup);
     game.world.bringToTop(playerGroup);
     game.world.bringToTop(wallGroup);
@@ -226,6 +275,9 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       });
     });
 
+    wallGroup.cacheAsBitmap = true;
+    floorGroup.cacheAsBitmap = true;
+
     // Setup doors
     _.each(levelGen.doors, door => {
       addDoor(levelGen.world, door);
@@ -235,7 +287,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     // Iterate through each room
     _.each(levelGen.rooms, room => {
       // Spawn stuff not in the starting room
-      if (!room.enter) spawnMonsters(room);
+      if (!room.enter && !room.exit && !room.special) spawnMonsters(room);
     });
   }
 
@@ -269,7 +321,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
 
       monster.body.mass = 100;
       monster.body.drag = 10000;
-      monster.body.maxVelocity = new Phaser.Point(16,16);
+      monster.body.maxVelocity = new Phaser.Point(16, 16);
     }
   }
 
@@ -422,8 +474,10 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
 
   function render() {
     _.each(players, player => {
-      player.nameBadge.x = player.sprite.x + player.sprite.width / 2;
-      player.nameBadge.y = player.sprite.y - player.sprite.height / 2;
+      if (player.nameBadge) {
+        player.nameBadge.x = player.sprite.x + player.sprite.width / 2;
+        player.nameBadge.y = player.sprite.y - player.sprite.height / 2;
+      }
     });
 
     genericUndeadGroup.forEach(undead => {
@@ -537,7 +591,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     // Adding
 
     if (this.nameBadge) {
-      this.nameBadge.setText(this.name);
+      this.nameBadge.text.setText(this.name);
     } else {
       this.nameBadge = game.add.graphics(0, 0);
 
@@ -578,6 +632,11 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     game.physics.arcade.collide(genericUndeadGroup, genericUndeadGroup);
     game.physics.arcade.collide(genericUndeadGroup, doorGroup);
 
+    game.physics.arcade.collide(goreEmitter, wallGroup);
+    game.physics.arcade.collide(goreEmitter, doorGroup);
+    game.physics.arcade.collide(bloodEmitter, wallGroup);
+    game.physics.arcade.collide(bloodEmitter, doorGroup);
+
     game.physics.arcade.collide(
       playerGroup,
       doorGroup,
@@ -611,11 +670,42 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
         this
       );
     });
+
+    goreEmitter.forEach(handleStoppedParticle);
+
+    bloodEmitter.forEach(handleStoppedParticle);
+    //decorGroup.cacheAsBitmap = true;
+  }
+
+  function handleStoppedParticle(particle) {
+    if (
+      particle.visible &&
+      particle.body.velocity.x == 0 &&
+      particle.body.velocity.y == 0
+    ) {
+      particle.visible = false;
+      decorGroup.cacheAsBitmap = false;
+
+      let particleClone = game.add.sprite(
+        particle.x,
+        particle.y,
+        particle.key,
+        particle.frame
+      );
+
+      particleClone.angle = particle.angle;
+      particleClone.scale.setTo(particle.scale.x, particle.scale.y);
+      particleClone.alpha = particle.alpha;
+      particleClone.anchor.x = 0.5;
+      particleClone.anchor.y = 0.5;
+      decorGroup.add(particleClone);      
+    }
   }
 
   function doorCollisionHandler(player, door) {
     if (!door.data.special && !door.data.exit) {
       door.loadTexture("doorsOpen", door.frame, false);
+      game.camera.shake(0.005, 60);
       door.body.enable = false;
     }
   }
@@ -627,11 +717,25 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   function bulletCollisionEnemy(bullet, enemy) {
     bullet.kill();
 
-    game.camera.shake(0.002, 60);
+    enemy.health--;
 
-    enemy.health--;    
     if (enemy.health == 0) {
+      game.camera.shake(0.005, 60);
+      goreEmitter.x = enemy.x + enemy.width / 2;
+      goreEmitter.y = enemy.y + enemy.height / 2;
+      goreEmitter.start(true, 1000, null, _.random(1, 3));
+
+      bloodEmitter.x = enemy.x + enemy.width / 2;
+      bloodEmitter.y = enemy.y + enemy.height / 2;
+      bloodEmitter.start(true, 1000, null, _.random(2, 3));
+      console.log(goreEmitter.children.length);
       enemy.destroy();
+    } else {
+      bloodEmitter.x = enemy.x + enemy.width / 2;
+      bloodEmitter.y = enemy.y + enemy.height / 2;
+      bloodEmitter.start(true, 1000, null, _.random(1, 2));
+      console.log(bloodEmitter.children.length);
+      game.camera.shake(0.002, 60);
     }
   }
 });
