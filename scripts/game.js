@@ -35,9 +35,14 @@ const requirejs = require("requirejs");
 const _ = require("lodash");
 const roguelike = require("roguelike/level/roguelike");
 
-const playerSpeed = 250;
+const playerSpeed = 100;
 
-const nameBadgeStyle = { fontSize: 16, font: "Arial", fill: "#ffffff", align: "center" };
+const nameBadgeStyle = {
+  fontSize: 16,
+  font: "Arial",
+  fill: "#ffffff",
+  align: "center"
+};
 
 // Setting up phaser
 window.PIXI = require("phaser/build/custom/pixi");
@@ -72,9 +77,14 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   let wallGroup = null;
   let floorGroup = null;
   let playerGroup = null;
+  let doorGroup = null;
+  let genericUndeadGroup = null;
+  let uiGroup = null;
 
   let entrance = null;
   let exit = null;
+
+  let genericUndeadIndex = _.range(14);
 
   function preload() {
     game.load.spritesheet(
@@ -104,6 +114,36 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       16,
       16
     );
+
+    game.load.spritesheet(
+      "doorsClosed",
+      "./assets/DawnLike/Objects/Door0.png",
+      16,
+      16
+    );
+
+    game.load.spritesheet(
+      "doorsOpen",
+      "./assets/DawnLike/Objects/Door1.png",
+      16,
+      16
+    );
+
+    game.load.spritesheet(
+      "undead0",
+      "./assets/DawnLike/Characters/Undead0.png",
+      16,
+      16
+    );
+
+    game.load.spritesheet(
+      "undead1",
+      "./assets/DawnLike/Characters/Undead1.png",
+      16,
+      16
+    );
+
+    game.load.spritesheet("ammo", "./assets/DawnLike/Items/Ammo.png", 16, 16);
   }
 
   function create() {
@@ -128,17 +168,26 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     wallGroup = game.add.group();
     playerGroup = game.add.group();
     floorGroup = game.add.group();
+    doorGroup = game.add.group();
+    genericUndeadGroup = game.add.group();
 
     game.world.sendToBack(floorGroup);
+    game.world.bringToTop(genericUndeadGroup);
     game.world.bringToTop(playerGroup);
+    game.world.bringToTop(wallGroup);
+    game.world.bringToTop(doorGroup);
 
     wallGroup.enableBody = true;
     playerGroup.enableBody = true;
+    doorGroup.enableBody = true;
+    genericUndeadGroup.enableBody = true;
 
     // Setup level data
     _.each(levelGen.world, (column, y) => {
       _.each(column, (tile, x) => {
         switch (tile) {
+          case 3:
+          case 4:
           case 1:
             // Floor
             addFloorTile(levelGen.world, x, y);
@@ -154,14 +203,6 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
             wall.body.immovable = true;
             wall.body.moves = false;
             wall.body.enable = true;
-
-            break;
-          case 3:
-            // Door
-            addFloorTile(levelGen.world, x, y);
-            break;
-          case 4:
-            // Special door?
             break;
           case 5:
             addFloorTile(levelGen.world, x, y);
@@ -184,6 +225,52 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
         }
       });
     });
+
+    // Setup doors
+    _.each(levelGen.doors, door => {
+      addDoor(levelGen.world, door);
+    });
+
+    // Create enemies
+    // Iterate through each room
+    _.each(levelGen.rooms, room => {
+      // Spawn stuff not in the starting room
+      if (!room.enter) spawnMonsters(room);
+    });
+  }
+
+  function spawnMonsters(room) {
+    // Get amount of enemies to spawn
+    let monsterCountMin = (room.width - 4) * (room.height - 4) / 5;
+    let monsterCountMax = (room.width - 4) * (room.height - 4) / 4;
+
+    if (monsterCountMin < 0) monsterCountMin = 0;
+    if (monsterCountMax < 1) monsterCountMax = 1;
+
+    let monsterCount = _.random(
+      monsterCountMin.toFixed(0),
+      monsterCountMax.toFixed(0)
+    );
+
+    for (let i = 0; i < monsterCount; i++) {
+      let monster = game.add.sprite(24, 24, "undead0");
+      monster.frame = _.sample(genericUndeadIndex);
+
+      monster.x = (_.random(room.width - 4) + room.left + 2) * 24;
+      monster.y = (_.random(room.height - 4) + room.top + 2) * 24;
+
+      monster.scale.setTo(1.5, 1.5);
+
+      monster.swapFrame = _.random(30, 60);
+
+      monster.health = _.random(5, 10);
+
+      genericUndeadGroup.add(monster);
+
+      monster.body.mass = 100;
+      monster.body.drag = 10000;
+      monster.body.maxVelocity = new Phaser.Point(16,16);
+    }
   }
 
   function addFloorTile(world, x, y) {
@@ -193,6 +280,39 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     floor.x = x * 24;
     floor.scale.setTo(1.5, 1.5);
     floorGroup.add(floor);
+  }
+
+  function addDoor(world, doorData) {
+    let door = game.add.sprite(24, 24, "doorsClosed");
+    door.data = doorData;
+    let x = doorData.x;
+    let y = doorData.y;
+    let doorIndex = 0;
+    // top
+    if (y - 1 > 0) {
+      if (world[y - 1][x] === 2) {
+        doorIndex = 1;
+      }
+    } else if (y + 1 < world.length) {
+      if (world[y + 1][x] === 2) {
+        doorIndex = 1;
+      }
+    }
+
+    let doorOffset = 0;
+
+    if (doorData.exit) doorOffset = 4;
+
+    if (doorData.special) doorOffset = 2;
+
+    door.frame = doorIndex + doorOffset;
+    door.scale.set(1.5, 1.5);
+    door.y = y * 24;
+    door.x = x * 24;
+    doorGroup.add(door);
+    door.body.immovable = true;
+    door.body.moves = false;
+    door.body.enable = true;
   }
 
   function getFloorTile(world, x, y) {
@@ -279,19 +399,19 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     let rowOffset = 20;
     // Map marching tile to sprite
     let wallMap = [
-      7,
+      2 + rowOffset * 1,
       1,
       1,
       1,
-      0 + rowOffset, // 4
+      1 + rowOffset * 1,
       2 + rowOffset * 2,
       0 + rowOffset * 2,
       4 + rowOffset * 2,
-      0 + rowOffset * 1, // 8
+      0 + rowOffset * 1,
       2,
       0,
       4,
-      0 + rowOffset * 1, // 12
+      0 + rowOffset * 1,
       5 + rowOffset * 1,
       3 + rowOffset * 1,
       4 + rowOffset * 1
@@ -301,8 +421,21 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   }
 
   function render() {
-    playerGroup.forEach(player => {
-      game.debug.body(player);
+    _.each(players, player => {
+      player.nameBadge.x = player.sprite.x + player.sprite.width / 2;
+      player.nameBadge.y = player.sprite.y - player.sprite.height / 2;
+    });
+
+    genericUndeadGroup.forEach(undead => {
+      if (undead.swapFrame == 0) {
+        if (undead.key === "undead0") {
+          undead.loadTexture("undead1", undead.frame, false);
+        } else {
+          undead.loadTexture("undead0", undead.frame, false);
+        }
+        undead.swapFrame = _.random(30, 60);
+      }
+      undead.swapFrame--;
     });
   }
 
@@ -312,32 +445,9 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   };
   Misc.applyUrlSettings(globals);
 
-  var pickRandomPosition = function() {
-    return {
-      x: 30 + Misc.randInt(game.width - 60),
-      y: 30 + Misc.randInt(game.height - 60)
-    };
-  };
-
-  var Goal = function() {
-    this.pickGoal();
-    this.radiusesSquared = globals.itemSize * 2 * globals.itemSize;
-  };
-
-  Goal.prototype.pickGoal = function() {
-    this.position = pickRandomPosition();
-  };
-
-  Goal.prototype.hit = function(otherPosition) {
-    var dx = otherPosition.x - this.position.x;
-    var dy = otherPosition.y - this.position.y;
-    return dx * dx + dy * dy < this.radiusesSquared;
-  };
-
   var Player = function(netPlayer, name) {
     this.netPlayer = netPlayer;
     this.name = name;
-    this.position = pickRandomPosition();
     this.color = 0x00ff00;
 
     netPlayer.addEventListener(
@@ -346,6 +456,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     );
     netPlayer.addEventListener("move", Player.prototype.movePlayer.bind(this));
     netPlayer.addEventListener("color", Player.prototype.setColor.bind(this));
+    netPlayer.addEventListener("fire", Player.prototype.fire.bind(this));
 
     this.playerNameManager = new PlayerNameManager(netPlayer);
     this.playerNameManager.on(
@@ -364,6 +475,43 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     playerGroup.add(this.sprite);
     game.physics.arcade.enable([this.sprite]);
     this.sprite.body.setSize(8, 8, 4, 4);
+
+    // Adding weapon
+    this.weapon = game.add.weapon(20, "ammo");
+
+    this.weapon.bulletAngleOffset = 225;
+    this.weapon.bulletAngleVariance = 5;
+
+    this.weapon.bulletSpeed = 300;
+    this.weapon.fireRate = 120;
+
+    this.weapon.trackSprite(
+      this.sprite,
+      this.sprite.width / 2,
+      this.sprite.height / 2
+    );
+  };
+
+  Player.prototype.fire = function(cmd) {
+    switch (cmd.direction) {
+      case "left":
+        this.weapon.fireAngle = 180;
+        break;
+      case "right":
+        this.weapon.fireAngle = 0;
+        break;
+      case "up":
+        this.weapon.fireAngle = 270;
+        break;
+      case "down":
+        this.weapon.fireAngle = 90;
+    }
+
+    this.weapon.fire();
+
+    this.weapon.bullets.forEach(bullet => {
+      bullet.frame = 16;
+    });
   };
 
   // The player disconnected
@@ -391,15 +539,22 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     if (this.nameBadge) {
       this.nameBadge.setText(this.name);
     } else {
-      this.nameBadge = game.add.text(
-        this.sprite.width / 4,
-        -this.sprite.height / 2,
-        this.name,
-        nameBadgeStyle
+      this.nameBadge = game.add.graphics(0, 0);
+
+      let text = game.add.text(0, 0, this.name, nameBadgeStyle);
+
+      text.anchor.set(0.5, 0.5);
+
+      this.nameBadge.beginFill(0x000000, 0.4);
+
+      this.nameBadge.drawRect(
+        -text.width / 2 - 2,
+        -text.height / 2 - 2,
+        text.width + 4,
+        text.height
       );
-      game.world.bringToTop(this.nameBadge);
-      this.nameBadge.anchor.set(0.5, 0.5);
-      this.sprite.addChild(this.nameBadge);
+
+      this.nameBadge.text = this.nameBadge.addChild(text);
     }
   };
 
@@ -410,8 +565,6 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   var server = new GameServer();
   GameSupport.init(server, globals);
 
-  var goal = new Goal();
-
   // A new player has arrived.
   server.addEventListener("playerconnect", function(netPlayer, name) {
     players.push(new Player(netPlayer, name));
@@ -420,5 +573,65 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   function update() {
     // Collision between players and walls
     game.physics.arcade.collide(wallGroup, playerGroup);
+    game.physics.arcade.collide(wallGroup, genericUndeadGroup);
+    game.physics.arcade.collide(playerGroup, genericUndeadGroup);
+    game.physics.arcade.collide(genericUndeadGroup, genericUndeadGroup);
+    game.physics.arcade.collide(genericUndeadGroup, doorGroup);
+
+    game.physics.arcade.collide(
+      playerGroup,
+      doorGroup,
+      doorCollisionHandler,
+      null,
+      this
+    );
+
+    _.each(players, player => {
+      game.physics.arcade.collide(
+        player.weapon.bullets,
+        wallGroup,
+        bulletCollisionWall,
+        null,
+        this
+      );
+
+      game.physics.arcade.collide(
+        player.weapon.bullets,
+        doorGroup,
+        bulletCollisionWall,
+        null,
+        this
+      );
+
+      game.physics.arcade.collide(
+        player.weapon.bullets,
+        genericUndeadGroup,
+        bulletCollisionEnemy,
+        null,
+        this
+      );
+    });
+  }
+
+  function doorCollisionHandler(player, door) {
+    if (!door.data.special && !door.data.exit) {
+      door.loadTexture("doorsOpen", door.frame, false);
+      door.body.enable = false;
+    }
+  }
+
+  function bulletCollisionWall(bullet, wall) {
+    bullet.kill();
+  }
+
+  function bulletCollisionEnemy(bullet, enemy) {
+    bullet.kill();
+
+    game.camera.shake(0.002, 60);
+
+    enemy.health--;    
+    if (enemy.health == 0) {
+      enemy.destroy();
+    }
   }
 });

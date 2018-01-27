@@ -80,6 +80,8 @@ let setupSteps = 2;
 let server;
 const state = {};
 
+require("electron-reload")(__dirname);
+
 args.baseDir = __dirname;
 happyfuntimes
   .start(args)
@@ -126,7 +128,6 @@ function createWindow() {
   gameWindow.loadURL(`file://${__dirname}/game.html?${settingsStr}`);
   if (isDevMode) {
     gameWindow.webContents.openDevTools();
-    require("electron-reload")(__dirname);
   }
 
   // open links in browser
