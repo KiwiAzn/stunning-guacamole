@@ -31,75 +31,116 @@
 "use strict";
 
 // Start the main app logic.
-requirejs([
-    '../node_modules/happyfuntimes/dist/hft',
-    '../node_modules/hft-sample-ui/dist/sample-ui',
-    '../node_modules/hft-game-utils/dist/game-utils',
-  ], function(
-    hft,
-    sampleUI,
-    gameUtils) {
+requirejs(
+  [
+    "../node_modules/happyfuntimes/dist/hft",
+    "../node_modules/hft-sample-ui/dist/sample-ui",
+    "../node_modules/hft-game-utils/dist/game-utils",
+    "../node_modules/lodash/lodash.min.js",
+    "../node_modules/nipplejs/dist/nipplejs.js"
+  ],
+  function(hft, sampleUI, gameUtils, _, nipplejs) {
+    var GameClient = hft.GameClient;
+    var CommonUI = sampleUI.commonUI;
+    var Input = sampleUI.input;
+    var Misc = sampleUI.misc;
+    var MobileHacks = sampleUI.mobileHacks;
+    var Touch = sampleUI.touch;
 
-  var GameClient = hft.GameClient;
-  var CommonUI = sampleUI.commonUI;
-  var Input = sampleUI.input;
-  var Misc = sampleUI.misc;
-  var MobileHacks = sampleUI.mobileHacks;
-  var Touch = sampleUI.touch;
+    const joystickOptions = {
+      multitouch: true,
+      maxNumberOfNipples: 2,
+      mode: "dynamic",
+      zone: document.getElementById("inputarea"),
+      threshold: 0.3
+    };
 
-  var globals = {
-    debug: false,
-  };
-  Misc.applyUrlSettings(globals);
-  MobileHacks.fixHeightHack();
+    let joystickManager = nipplejs.create(joystickOptions);
 
-  var score = 0;
-  var statusElem = document.getElementById("gamestatus");
-  var inputElem = document.getElementById("inputarea");
-  var colorElem = document.getElementById("display");
-  var client = new GameClient();
+    var globals = {
+      debug: false
+    };
+    Misc.applyUrlSettings(globals);
+    MobileHacks.fixHeightHack();
 
-  CommonUI.setupStandardControllerUI(client, globals);
-  CommonUI.askForNameOnce();   // ask for the user's name if not set
-  CommonUI.showMenu(true);     // shows the gear menu
+    var score = 0;
+    var statusElem = document.getElementById("gamestatus");
+    var inputElem = document.getElementById("inputarea");
+    var colorElem = document.getElementById("display");
+    var client = new GameClient();
 
-  var randInt = function(range) {
-    return Math.floor(Math.random() * range);
-  };
+    CommonUI.setupStandardControllerUI(client, globals);
+    CommonUI.askForNameOnce(); // ask for the user's name if not set
+    CommonUI.showMenu(true); // shows the gear menu
 
-  // Sends a move command to the game.
-  //
-  // This will generate a 'move' event in the corresponding
-  // NetPlayer object in the game.
-  var sendMoveCmd = function(position, target) {
-    client.sendCmd('move', {
-      x: position.x / target.clientWidth,
-      y: position.y / target.clientHeight,
+    var randInt = function(range) {
+      return Math.floor(Math.random() * range);
+    };
+
+    joystickManager
+      .on("end", (evt, data) => {
+        client.sendCmd("move", {
+          x: 0,
+          y: 0
+        });
+      })
+      .on("move direction", (evt, data) => {
+        if (data.position.x < window.innerWidth / 2) {
+          // left thumbstick
+          let movementPacket = {
+            x: 0,
+            y: 0
+          };
+
+          if (data.direction) {
+            movementPacket = {
+              x: Math.cos(data.angle.radian),
+              y: -Math.sin(data.angle.radian),
+
+              lookDir: data.direction.angle
+            };
+          }
+
+          client.sendCmd("move", movementPacket);
+        } else {
+          // right thumbstick
+          if (data.direction) {
+            client.sendCmd("fire", {
+              direction: data.direction.angle
+            });
+          }
+        }
+      });
+
+    // Sends a move command to the game.
+    //
+    // This will generate a 'move' event in the corresponding
+    // NetPlayer object in the game.
+    var sendMoveCmd = function(position, target) {
+      client.sendCmd("move", {
+        x: position.x / target.clientWidth,
+        y: position.y / target.clientHeight
+      });
+    };
+
+    // Pick a random color
+    var color =
+      "rgb(" + randInt(256) + "," + randInt(256) + "," + randInt(256) + ")";
+    // Send the color to the game.
+    //
+    // This will generate a 'color' event in the corresponding
+    // NetPlayer object in the game.
+    client.sendCmd("color", {
+      color: color
     });
-  };
+    colorElem.style.backgroundColor = color;
 
-  // Pick a random color
-  var color =  'rgb(' + randInt(256) + "," + randInt(256) + "," + randInt(256) + ")";
-  // Send the color to the game.
-  //
-  // This will generate a 'color' event in the corresponding
-  // NetPlayer object in the game.
-  client.sendCmd('color', {
-    color: color,
-  });
-  colorElem.style.backgroundColor = color;
+    // Update our score when the game tells us.
+    client.addEventListener("scored", function(cmd) {
+      score += cmd.points;
+      statusElem.innerHTML = "You scored: " + cmd.points + " total: " + score;
+    });
+  }
+);
 
-  // Send a message to the game when the screen is touched
-  inputElem.addEventListener('pointermove', function(event) {
-    var position = Input.getRelativeCoordinates(event.target, event);
-    sendMoveCmd(position, event.target);
-    event.preventDefault();
-  });
-
-  // Update our score when the game tells us.
-  client.addEventListener('scored', function(cmd) {
-    score += cmd.points;
-    statusElem.innerHTML = "You scored: " + cmd.points + " total: " + score;
-  });
-});
-
+function convertDirection(angle) {}

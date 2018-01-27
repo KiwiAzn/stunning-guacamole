@@ -35,6 +35,10 @@ const requirejs = require("requirejs");
 const _ = require("lodash");
 const roguelike = require("roguelike/level/roguelike");
 
+const playerSpeed = 250;
+
+const nameBadgeStyle = { fontSize: 16, font: "Arial", fill: "#ffffff", align: "center" };
+
 // Setting up phaser
 window.PIXI = require("phaser/build/custom/pixi");
 window.p2 = require("phaser/build/custom/p2");
@@ -59,10 +63,18 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   let game = new Phaser.Game(1920, 1080, Phaser.AUTO, "playfield", {
     preload: preload,
     create: create,
-    render: render
+    render: render,
+    update: update
   });
 
   let graphics = null;
+
+  let wallGroup = null;
+  let floorGroup = null;
+  let playerGroup = null;
+
+  let entrance = null;
+  let exit = null;
 
   function preload() {
     game.load.spritesheet(
@@ -85,10 +97,18 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       16,
       16
     );
+
+    game.load.spritesheet(
+      "tiles",
+      "./assets/DawnLike/Objects/Tile.png",
+      16,
+      16
+    );
   }
 
   function create() {
-    console.log("asdf");
+    game.physics.startSystem(Phaser.Physics.ARCADE);
+
     graphics = game.add.graphics(0, 0);
 
     let levelGen = roguelike({
@@ -105,42 +125,126 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       }
     });
 
+    wallGroup = game.add.group();
+    playerGroup = game.add.group();
+    floorGroup = game.add.group();
+
+    game.world.sendToBack(floorGroup);
+    game.world.bringToTop(playerGroup);
+
+    wallGroup.enableBody = true;
+    playerGroup.enableBody = true;
+
     // Setup level data
-    let level = {
-      walls: _.each(levelGen.world, (column, y) => {
-        _.each(column, (tile, x) => {
-          switch (tile) {
-            case 1:
-              // Floor
-              let floor = game.add.sprite(24, 24, "floors");
-              floor.frame = 0;
-              floor.y = y * 24;
-              floor.x = x * 24;
-              floor.scale.setTo(1.5, 1.5);
-              break;
-            case 2:
-              // Wall
-              let wall = game.add.sprite(24, 24, "walls");
-              wall.frame = getWallTile(levelGen.world, x, y);
-              wall.y = y * 24;
-              wall.x = x * 24;
-              wall.scale.setTo(1.5, 1.5);
-              break;
-            case 3:
-              // Door
-              break;
-            case 4:
-              // Entrance?
-              break;
-            case 5:
-              // Exit?
-              break;
-            default:
-              break;
-          }
-        });
-      })
-    };
+    _.each(levelGen.world, (column, y) => {
+      _.each(column, (tile, x) => {
+        switch (tile) {
+          case 1:
+            // Floor
+            addFloorTile(levelGen.world, x, y);
+            break;
+          case 2:
+            // Wall
+            let wall = game.add.sprite(24, 24, "walls");
+            wall.frame = getWallTile(levelGen.world, x, y);
+            wall.y = y * 24;
+            wall.x = x * 24;
+            wall.scale.setTo(1.5, 1.5);
+            wallGroup.add(wall);
+            wall.body.immovable = true;
+            wall.body.moves = false;
+            wall.body.enable = true;
+
+            break;
+          case 3:
+            // Door
+            addFloorTile(levelGen.world, x, y);
+            break;
+          case 4:
+            // Special door?
+            break;
+          case 5:
+            addFloorTile(levelGen.world, x, y);
+            entrance = game.add.sprite(24, 24, "tiles");
+            entrance.y = y * 24;
+            entrance.x = x * 24;
+            entrance.scale.setTo(1.5, 1.5);
+            entrance.frame = 5 + 24;
+            break;
+          case 6:
+            addFloorTile(levelGen.world, x, y);
+            exit = game.add.sprite(24, 24, "tiles");
+            exit.y = y * 24;
+            exit.x = x * 24;
+            exit.scale.setTo(1.5, 1.5);
+            exit.frame = 7 + 24;
+            break;
+          default:
+            break;
+        }
+      });
+    });
+  }
+
+  function addFloorTile(world, x, y) {
+    let floor = game.add.sprite(24, 24, "floors");
+    floor.frame = getFloorTile(world, x, y);
+    floor.y = y * 24;
+    floor.x = x * 24;
+    floor.scale.setTo(1.5, 1.5);
+    floorGroup.add(floor);
+  }
+
+  function getFloorTile(world, x, y) {
+    let marchingTile = 0;
+    let rowOffset = 21;
+    // Floor Sprite sheet is 21x39 (336px x 624px)
+    // left
+    if (x - 1 > 0) {
+      if (world[y][x - 1] === 2) {
+        marchingTile += 1;
+      }
+    }
+    // right
+    if (x + 1 < world[0].length) {
+      if (world[y][x + 1] === 2) {
+        marchingTile += 2;
+      }
+    }
+    // top
+    if (y - 1 > 0) {
+      if (world[y - 1][x] === 2) {
+        marchingTile += 4;
+      }
+    }
+    // bottom
+    if (y + 1 < world.length) {
+      if (world[y + 1][x] === 2) {
+        marchingTile += 8;
+      }
+    }
+
+    // Map marching tile to sprite
+    let wallMap = [
+      1 + rowOffset * 1, // None
+      0 + rowOffset * 1, // L
+      2 + rowOffset * 1, // R
+      3 + rowOffset * 1, // LR
+      1, // T 4
+      0, // TR
+      2,
+      3,
+      1 + rowOffset * 2, // 8
+      0 + rowOffset * 2,
+      2 + rowOffset * 2,
+      3 + rowOffset * 2,
+      5 + rowOffset * 1,
+      4 + rowOffset * 1,
+      6 + rowOffset * 1,
+      5
+    ];
+
+    return wallMap[marchingTile] + rowOffset * 3;
   }
 
   // Figures out which tiles to use according to the surronding walls
@@ -197,9 +301,9 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   }
 
   function render() {
-    graphics.clear();
-    graphics.beginFill(0xff0000, 1);
-    graphics.drawCircle(goal.position.x, goal.position.y, 64);
+    playerGroup.forEach(player => {
+      game.debug.body(player);
+    });
   }
 
   var players = [];
@@ -248,17 +352,27 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       "setName",
       Player.prototype.handleNameMsg.bind(this)
     );
-
-    this.sprite = game.add.sprite(24, 24, "players");
-    this.sprite.frame = 0;
+    // Adding player sprite
+    this.sprite = game.add.sprite(16, 16, "players");
     this.sprite.scale.setTo(1.5, 1.5);
+
+    this.sprite.frame = 0;
+
+    this.sprite.x = entrance.x;
+    this.sprite.y = entrance.y;
+
+    playerGroup.add(this.sprite);
+    game.physics.arcade.enable([this.sprite]);
+    this.sprite.body.setSize(8, 8, 4, 4);
   };
 
-  // The player disconnected.
+  // The player disconnected
   Player.prototype.disconnect = function() {
     for (var ii = 0; ii < players.length; ++ii) {
       var player = players[ii];
       if (player === this) {
+        player.nameBadge.destroy();
+        player.sprite.destroy();
         players.splice(ii, 1);
         return;
       }
@@ -266,24 +380,27 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   };
 
   Player.prototype.movePlayer = function(cmd) {
-    this.position.x = Math.floor(cmd.x * game.width);
-    this.position.y = Math.floor(cmd.y * game.height);
-
-    this.sprite.x = this.position.x;
-    this.sprite.y = this.position.y;
-
-    if (goal.hit(this.position)) {
-      // This will generate a 'scored' event on the client (player's smartphone)
-      // that corresponds to this player.
-      this.netPlayer.sendCmd("scored", {
-        points: 5 + Misc.randInt(6) // 5 to 10 points
-      });
-      goal.pickGoal();
-    }
+    this.sprite.body.velocity.x = cmd.x * playerSpeed;
+    this.sprite.body.velocity.y = cmd.y * playerSpeed;
   };
 
   Player.prototype.handleNameMsg = function(name) {
     this.name = name;
+    // Adding
+
+    if (this.nameBadge) {
+      this.nameBadge.setText(this.name);
+    } else {
+      this.nameBadge = game.add.text(
+        this.sprite.width / 4,
+        -this.sprite.height / 2,
+        this.name,
+        nameBadgeStyle
+      );
+      game.world.bringToTop(this.nameBadge);
+      this.nameBadge.anchor.set(0.5, 0.5);
+      this.sprite.addChild(this.nameBadge);
+    }
   };
 
   Player.prototype.setColor = function(cmd) {
@@ -300,12 +417,8 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     players.push(new Player(netPlayer, name));
   });
 
-  /*var render = function() {
-    Misc.resize(canvas);
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    players.forEach(function(player) {
-      drawItem(player.position, player.color);
-    });
-    drawItem(goal.position, globals.frameCount & 4 ? 'red' : 'pink');
-  };*/
+  function update() {
+    // Collision between players and walls
+    game.physics.arcade.collide(wallGroup, playerGroup);
+  }
 });

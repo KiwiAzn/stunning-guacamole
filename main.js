@@ -1,48 +1,76 @@
 "use strict";
 
-const isOSX = process.platform === 'darwin';
-const isDevMode = process.env.NODE_ENV === 'development';
+const isOSX = process.platform === "darwin";
+const isDevMode = process.env.NODE_ENV === "development";
 
 var optionSpec = {
   options: [
-   { option: 'demo',             type: 'Boolean', description: 'put random characters in'},
-   { option: 'port', alias: 'p', type: 'Int',     description: 'port. Default 18679'},
-   { option: 'dns',              type: 'Boolean', description: 'enable dns server'},
-   { option: 'address',          type: 'String',  description: 'ip address for dns and controller url conversion'},
-   { option: 'help', alias: 'h', type: 'Boolean', description: 'displays help'},
-   { option: 'private-server',   type: 'Boolean', description: 'do not inform happyfuntimes.net about this server. Users will not be able to use happyfuntimes.net to connect to your games'},
-   { option: 'debug',            type: 'Boolean', description: 'check more things'},
-   { option: 'verbose',          type: 'Boolean', description: 'print more stuff'},
-   { option: 'system-name',      type: 'String',  description: 'name used if multiple happyFunTimes servers are running on the same network. Default = computer name'},
+    {
+      option: "demo",
+      type: "Boolean",
+      description: "put random characters in"
+    },
+    {
+      option: "port",
+      alias: "p",
+      type: "Int",
+      description: "port. Default 18679"
+    },
+    { option: "dns", type: "Boolean", description: "enable dns server" },
+    {
+      option: "address",
+      type: "String",
+      description: "ip address for dns and controller url conversion"
+    },
+    {
+      option: "help",
+      alias: "h",
+      type: "Boolean",
+      description: "displays help"
+    },
+    {
+      option: "private-server",
+      type: "Boolean",
+      description:
+        "do not inform happyfuntimes.net about this server. Users will not be able to use happyfuntimes.net to connect to your games"
+    },
+    { option: "debug", type: "Boolean", description: "check more things" },
+    { option: "verbose", type: "Boolean", description: "print more stuff" },
+    {
+      option: "system-name",
+      type: "String",
+      description:
+        "name used if multiple happyFunTimes servers are running on the same network. Default = computer name"
+    }
   ],
   helpStyle: {
-    typeSeparator: '=',
-    descriptionSeparator: ' : ',
-    initialIndent: 4,
-  },
+    typeSeparator: "=",
+    descriptionSeparator: " : ",
+    initialIndent: 4
+  }
 };
 
-const optionator = require('optionator')(optionSpec);
+const optionator = require("optionator")(optionSpec);
 
 try {
   var args = optionator.parse(process.argv);
 } catch (e) {
   console.error(e);
-  process.exit(1);  // eslint-disable-line
+  process.exit(1); // eslint-disable-line
 }
 
 function printHelp() {
   console.log(optionator.generateHelp());
-  process.exit(0);  // eslint-disable-line
+  process.exit(0); // eslint-disable-line
 }
 
 if (args.help) {
   printHelp();
 }
 
-const happyfuntimes = require('happyfuntimes');
-const electron = require('electron');
-const querystring = require('querystring');
+const happyfuntimes = require("happyfuntimes");
+const electron = require("electron");
+const querystring = require("querystring");
 const webContents = electron.webContents;
 
 const app = electron.app;
@@ -53,21 +81,25 @@ let server;
 const state = {};
 
 args.baseDir = __dirname;
-happyfuntimes.start(args)
-.then((srv) => {
-  server = srv;
-  const ports = server.ports;
-  console.log("Listening on ports:", ports);
-  state.ports = ports;
-  state.port = ports[0];
-  startIfReady();
-})
-.catch((err) => {
-  console.error("error starting server:", err);
-});
+happyfuntimes
+  .start(args)
+  .then(srv => {
+    server = srv;
+    const ports = server.ports;
+    console.log("Listening on ports:", ports);
+    state.ports = ports;
+    state.port = ports[0];
+    startIfReady();
+  })
+  .catch(err => {
+    console.error("error starting server:", err);
+  });
 
 function createWindow() {
-  const {width: screenWidth, height: screenHeight} = electron.screen.getPrimaryDisplay().workAreaSize;
+  const {
+    width: screenWidth,
+    height: screenHeight
+  } = electron.screen.getPrimaryDisplay().workAreaSize;
   const space = 50;
   const x = space;
   const y = space;
@@ -83,31 +115,32 @@ function createWindow() {
     x: x,
     y: y,
     width: width,
-    height: height,
+    height: height
   });
 
   const settings = {
-    hftUrl: 'ws://localhost:' + state.port,
-    demo: args.demo,
+    hftUrl: "ws://localhost:" + state.port,
+    demo: args.demo
   };
   const settingsStr = querystring.stringify(settings);
   gameWindow.loadURL(`file://${__dirname}/game.html?${settingsStr}`);
   if (isDevMode) {
     gameWindow.webContents.openDevTools();
+    require("electron-reload")(__dirname);
   }
 
   // open links in browser
   const webContents = gameWindow.webContents;
   const handleRedirect = (e, url) => {
-    if(url != webContents.getURL()) {
+    if (url != webContents.getURL()) {
       e.preventDefault();
       electron.shell.openExternal(url);
     }
   };
 
-  webContents.on('will-navigate', handleRedirect);
-  webContents.on('new-window', handleRedirect);
-  webContents.on('dom-ready', () => {
+  webContents.on("will-navigate", handleRedirect);
+  webContents.on("new-window", handleRedirect);
+  webContents.on("dom-ready", () => {
     if (!isDevMode) {
       gameWindow.setFullScreen(true);
     }
@@ -122,11 +155,11 @@ function startIfReady() {
   }
 }
 
-app.on('ready', () => {
+app.on("ready", () => {
   startIfReady();
 });
 
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   server.close();
   app.quit();
 });
@@ -134,4 +167,3 @@ app.on('window-all-closed', () => {
 function setupMenus() {
   electron.Menu.setApplicationMenu(null);
 }
-
