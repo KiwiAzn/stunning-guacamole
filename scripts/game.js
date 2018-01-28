@@ -80,6 +80,9 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   let doorGroup = null;
   let genericUndeadGroup = null;
   let uiGroup = null;
+  let smellGroup = null;
+  let lootGroup = null;
+  let renderBodyGroup = null;
 
   let decorGroup = null;
   let goreEmitter = null;
@@ -88,7 +91,33 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
   let entrance = null;
   let exit = null;
 
+  let specialKey = null;
+  let exitKey = null;
+
   let genericUndeadIndex = _.range(14);
+  let lootIndex = _.concat(
+    _.fill(_.range(20), 10),
+    _.fill(_.range(10), 9),
+    _.fill(_.range(5), 8),
+    [17]
+  );
+
+  let lootValue = {
+    0: 10,
+    1: 5,
+    2: 1,
+    3: 500,
+    4: 50,
+    5: 10,
+    8: 5000,
+    9: 2500,
+    10: 500,
+    11: 50000,
+    12: 10000,
+    13: 5000,
+    16: 25000,
+    17: 15000
+  };
 
   function preload() {
     game.load.spritesheet(
@@ -157,6 +186,10 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       16,
       16
     );
+
+    game.load.spritesheet("key", "./assets/DawnLike/Items/Key.png", 16, 16);
+
+    game.load.spritesheet("loot", "./assets/DawnLike/Items/Money.png", 16, 16);
   }
 
   function create() {
@@ -184,6 +217,10 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     doorGroup = game.add.group();
     genericUndeadGroup = game.add.group();
     decorGroup = game.add.group();
+    smellGroup = game.add.group();
+    lootGroup = game.add.group();
+
+    renderBodyGroup = game.add.group();
 
     // Create gore emitter
     goreEmitter = game.add.emitter(0, 0, 500);
@@ -221,6 +258,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     game.world.sendToBack(floorGroup);
     game.world.bringToTop(bloodEmitter);
     game.world.bringToTop(goreEmitter);
+    game.world.bringToTop(lootGroup);
     game.world.bringToTop(genericUndeadGroup);
     game.world.bringToTop(playerGroup);
     game.world.bringToTop(wallGroup);
@@ -228,7 +266,9 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
 
     wallGroup.enableBody = true;
     playerGroup.enableBody = true;
+    smellGroup.enableBody = true;
     doorGroup.enableBody = true;
+    lootGroup.enableBody = true;
     genericUndeadGroup.enableBody = true;
 
     // Setup level data
@@ -288,6 +328,7 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     _.each(levelGen.rooms, room => {
       // Spawn stuff not in the starting room
       if (!room.enter && !room.exit && !room.special) spawnMonsters(room);
+      if (room.special) spawnLootInRoom(room);
     });
   }
 
@@ -319,10 +360,51 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
 
       genericUndeadGroup.add(monster);
 
+      monster.state = "IDLE";
+      monster.idleDuration = _.random(100, 500);
+
       monster.body.mass = 100;
-      monster.body.drag = 10000;
-      monster.body.maxVelocity = new Phaser.Point(16, 16);
+      monster.body.drag = 1000;
+      monster.body.setSize(8, 8, 4, 4);
+      monster.body.maxVelocity = new Phaser.Point(48, 48);
     }
+  }
+
+  function spawnLootInRoom(room) {
+    // Get amount of enemies to spawn
+    let lootCountMin = (room.width - 2) * (room.height - 2) / 2;
+    let lootCountMax = (room.width - 2) * (room.height - 2);
+
+    if (lootCountMin < 0) lootCountMin = 0;
+    if (lootCountMax < 1) lootCountMax = 1;
+
+    let lootCount = _.random(lootCountMin.toFixed(0), lootCountMax.toFixed(0));
+
+    for (let i = 0; i < lootCount; i++) {
+      spawnLoot(
+        (_.random(room.width - 1) + room.left) * 24,
+        (_.random(room.height - 1) + room.top) * 24
+      );
+    }
+  }
+
+  function spawnLoot(x, y) {
+    let loot = game.add.sprite(0, 0, "loot");
+    loot.frame = _.sample(lootIndex);
+
+    loot.x = x;
+    loot.y = y;
+
+    loot.scale.setTo(1.5, 1.5);
+
+    loot.value = lootValue[loot.frame];
+
+    lootGroup.add(loot);
+    loot.body.mass = 100;
+    loot.body.drag = 1000;
+    loot.body.setSize(8, 8, 4, 4);
+    loot.body.maxVelocity = new Phaser.Point(48, 48);
+    return loot;
   }
 
   function addFloorTile(world, x, y) {
@@ -491,6 +573,8 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       }
       undead.swapFrame--;
     });
+
+    //renderBodyGroup.forEach(game.debug.body, game.debug);
   }
 
   var players = [];
@@ -544,6 +628,13 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       this.sprite.width / 2,
       this.sprite.height / 2
     );
+
+    // Adding a 'smell' radius
+    let smell = game.add.sprite(0, 0, "");
+    smellGroup.add(smell);
+    smell.body.setCircle(128, -120, -120);
+
+    smell.player = this.sprite;
   };
 
   Player.prototype.fire = function(cmd) {
@@ -628,6 +719,8 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     // Collision between players and walls
     game.physics.arcade.collide(wallGroup, playerGroup);
     game.physics.arcade.collide(wallGroup, genericUndeadGroup);
+    game.physics.arcade.collide(wallGroup, lootGroup);
+    game.physics.arcade.collide(doorGroup, lootGroup);
     game.physics.arcade.collide(playerGroup, genericUndeadGroup);
     game.physics.arcade.collide(genericUndeadGroup, genericUndeadGroup);
     game.physics.arcade.collide(genericUndeadGroup, doorGroup);
@@ -636,6 +729,16 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
     game.physics.arcade.collide(goreEmitter, doorGroup);
     game.physics.arcade.collide(bloodEmitter, wallGroup);
     game.physics.arcade.collide(bloodEmitter, doorGroup);
+
+    game.physics.arcade.overlap(playerGroup, lootGroup, lootHandler);
+
+    game.physics.arcade.overlap(
+      smellGroup,
+      genericUndeadGroup,
+      smellHandler,
+      null,
+      this
+    );
 
     game.physics.arcade.collide(
       playerGroup,
@@ -671,10 +774,66 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       );
     });
 
-    goreEmitter.forEach(handleStoppedParticle);
+    smellGroup.forEach(smell => {
+      smell.x = smell.player.x;
+      smell.y = smell.player.y;
+    });
+
+    lootGroup.forEach(loot => {
+      loot.body.velocity.x *= 0.9;
+      loot.body.velocity.y *= 0.9;
+    })
+
+    genericUndeadGroup.forEach(undead => {
+      if (undead.state === "WANDER") {
+        if (undead.walkDuration > 0) {
+          undead.body.velocity.x = undead.walkSpeed.x;
+          undead.body.velocity.y = undead.walkSpeed.y;
+          undead.walkDuration--;
+        } else {
+          undead.body.velocity.x = 0;
+          undead.body.velocity.y = 0;
+          undead.state = "IDLE";
+          undead.idleDuration = _.random(100, 400);
+        }
+      } else if (undead.state === "IDLE") {
+        if (undead.idleDuration === 0) {
+          if (_.random(1, 15) == 1) {
+            undead.state = "WANDER";
+            let angle = Math.random() * Math.PI * 2;
+            undead.walkSpeed = {
+              x: Math.cos(angle) * 50,
+              y: Math.cos(angle) * 50
+            };
+
+            undead.walkDuration = _.random(50, 100);
+          }
+        }
+        if (undead.idleDuration > 0) {
+          undead.idleDuration--;
+        }
+      } else if (undead.state == "STUNNED") {
+        undead.stunnedTime--;
+        undead.body.velocity.x *= 0.9;
+        undead.body.velocity.y *= 0.9;
+
+        if (undead.stunnedTime == 0) {
+          undead.state = "IDLE";
+          undead.body.maxVelocity = new Phaser.Point(48, 48);
+        }
+      } else if (undead.state == "CHASE") {
+        game.physics.arcade.moveToObject(undead, undead.target, false, 200);
+      }
+    });
 
     bloodEmitter.forEach(handleStoppedParticle);
-    //decorGroup.cacheAsBitmap = true;
+    goreEmitter.forEach(handleStoppedParticle);
+  }
+
+  function lootHandler(player, loot) {
+    player.score += loot.value;
+    // Update score on phone
+    loot.destroy();
   }
 
   function handleStoppedParticle(particle) {
@@ -698,7 +857,16 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       particleClone.alpha = particle.alpha;
       particleClone.anchor.x = 0.5;
       particleClone.anchor.y = 0.5;
-      decorGroup.add(particleClone);      
+      decorGroup.add(particleClone);
+    }
+  }
+
+  function wanderWallHandler(undead, wall) {
+    if (undead.state == "WANDER") {
+      undead.body.velocity.x = 0;
+      undead.body.velocity.y = 0;
+      undead.state = "IDLE";
+      undead.idleDuration = _.random(100, 400);
     }
   }
 
@@ -707,6 +875,35 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
       door.loadTexture("doorsOpen", door.frame, false);
       game.camera.shake(0.005, 60);
       door.body.enable = false;
+
+      let doorKick = game.add.sprite(door.x, door.y, "");
+      game.physics.enable(doorKick);
+      doorKick.body.setSize(64, 64, -door.width + 1, -door.height + 1);
+      game.physics.arcade.overlap(
+        doorKick,
+        genericUndeadGroup,
+        doorKickHandler,
+        null,
+        this
+      );
+      renderBodyGroup.add(doorKick);
+    }
+  }
+
+  function doorKickHandler(door, undead) {
+    undead.state = "STUNNED";
+    undead.target = null;
+    undead.stunnedTime = _.random(60, 120);
+    undead.body.velocity.x = (undead.x - door.x + door.width / 2) * 500;
+    undead.body.velocity.y = (undead.y - door.y + door.height / 2) * 500;
+    undead.body.maxVelocity = new Phaser.Point(128, 128);
+  }
+
+  function smellHandler(smell, monster) {
+    if (monster.state != "STUNNED") {
+      monster.state = "CHASE";
+      monster.target = smell;
+      monster.body.maxVelocity = new Phaser.Point(64, 64);
     }
   }
 
@@ -721,21 +918,34 @@ requirejs(["happyfuntimes", "hft-game-utils", "hft-sample-ui"], function(
 
     if (enemy.health == 0) {
       game.camera.shake(0.005, 60);
-      goreEmitter.x = enemy.x + enemy.width / 2;
-      goreEmitter.y = enemy.y + enemy.height / 2;
-      goreEmitter.start(true, 1000, null, _.random(1, 3));
 
       bloodEmitter.x = enemy.x + enemy.width / 2;
       bloodEmitter.y = enemy.y + enemy.height / 2;
       bloodEmitter.start(true, 1000, null, _.random(2, 3));
-      console.log(goreEmitter.children.length);
+
+      goreEmitter.x = enemy.x + enemy.width / 2;
+      goreEmitter.y = enemy.y + enemy.height / 2;
+      goreEmitter.start(true, 1000, null, _.random(1, 3));
+
+      // spawn key if
+      if (_.random(0, genericUndeadGroup.length) == 0) {
+        specialKey = game.add.sprite(enemy.x, enemy.y, "key");
+        speicalKey.scale.setTo(1.5,1.5);
+      }
+
+      let loot = spawnLoot(enemy.x, enemy.y);
+
+      loot.body.velocity.x = -enemy.body.velocity.x;
+      loot.body.velocity.y = -enemy.body.velocity.y;
+      
       enemy.destroy();
     } else {
       bloodEmitter.x = enemy.x + enemy.width / 2;
       bloodEmitter.y = enemy.y + enemy.height / 2;
       bloodEmitter.start(true, 1000, null, _.random(1, 2));
-      console.log(bloodEmitter.children.length);
       game.camera.shake(0.002, 60);
+      enemy.body.velocity.x *= .9;
+      enemy.body.velocity.y *= .9;
     }
   }
 });
